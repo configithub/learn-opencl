@@ -7,6 +7,34 @@ Add two vectors, then multiply the result by two and output the value.
 Concepts introduced:
 =========
 
+##Send scalar to the GPU
+
+This can be done directly by giving the scalar value as an argument to the kernel :
+```
+  ret = clSetKernelArg(mult_kernel, 1, sizeof(int), &scalar);
+```
+
+##Send vector to the GPU
+
+This has to be carried out in 3 steps : 
+
+- Allocation on the standard memory
+- Create memory buffer on GPU memory, represented by a cl_mem virtual object :
+```
+  cl_mem a_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, 
+      LIST_SIZE * sizeof(int), NULL, &ret);
+```
+- Write to buffer :
+```
+  ret = clEnqueueWriteBuffer(command_queue, a_mem_obj, CL_TRUE, 0,
+      LIST_SIZE * sizeof(int), A, 0, NULL, NULL);
+```
+
+The vector thus allocated on the GPU memory can then be given to a kernel as an argument : 
+```
+  ret = clSetKernelArg(add_kernel, 0, sizeof(cl_mem), (void *)&a_mem_obj);
+```
+
 ##Cl event :
 
 These objects can be given to clEnqueue functions to make them wait for other functions to finish before being called on the GPU.

@@ -71,15 +71,17 @@ int main(void) {
     A[i] = i;
     B[i] = LIST_SIZE - i;
   }
+  int scalar = 3;
 
   // Create memory buffers on the device for each vector 
   cl_mem a_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, 
       LIST_SIZE * sizeof(int), NULL, &ret);
   cl_mem b_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY,
       LIST_SIZE * sizeof(int), NULL, &ret);
+
   cl_mem c_mem_obj = clCreateBuffer(context, CL_MEM_READ_WRITE, 
       LIST_SIZE * sizeof(int), NULL, &ret);
-
+  
   // Copy the lists A and B to their respective memory buffers
   ret = clEnqueueWriteBuffer(command_queue, a_mem_obj, CL_TRUE, 0,
       LIST_SIZE * sizeof(int), A, 0, NULL, NULL);
@@ -93,6 +95,7 @@ int main(void) {
 
   // Set the arguments of the mult kernel
   ret = clSetKernelArg(mult_kernel, 0, sizeof(cl_mem), (void *)&c_mem_obj);
+  ret = clSetKernelArg(mult_kernel, 1, sizeof(int), &scalar);
 
   // Execute the OpenCL add_kernel on the list
   size_t global_item_size = LIST_SIZE; // Process the entire lists
@@ -115,7 +118,7 @@ int main(void) {
 
   // Display the result to the screen
   for(i = 0; i < LIST_SIZE; i++)
-    printf("(%d + %d) * 2 = %d\n", A[i], B[i], C[i]);
+    printf("(%d + %d) * %d = %d\n", A[i], B[i], scalar, C[i]);
 
   // Clean up
   ret = clFlush(command_queue);
