@@ -44,6 +44,7 @@ clEnqueueTask
 
 To use this mode, out of order execution must be activated in the command queue : 
 ```
-  cl_command_queue command_queue = clCreateCommandQueue(context, device_id, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &ret);
+  cl_command_queue command_queue = clCreateCommandQueue(context, device_id, 
+                        CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &ret);
 ```
 Else the queued tasks will be executed one after the other.
