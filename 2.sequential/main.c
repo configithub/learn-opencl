@@ -71,7 +71,7 @@ int main(void) {
     A[i] = i;
     B[i] = LIST_SIZE - i;
   }
-  int scalar = 3;
+  int scalar = 4;
 
   // Create memory buffers on the device for each vector 
   cl_mem a_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, 
