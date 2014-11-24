@@ -10,29 +10,32 @@
 #endif
 
 #define MAX_SOURCE_SIZE (0x100000)
-#define LIST_SIZE 4096
-//#define LIST_SIZE 4194304
-#define LOCAL_ITEM_SIZE 512
+//#define LIST_SIZE 4096
+#define LIST_SIZE 4194304
+#define LOCAL_ITEM_SIZE 1024
 #define MAX_VALUE 128
-#define NB_TEST 1000
+#define NB_TEST 10
 
 // result arrays
 int gpu[NB_TEST];
 
 int gpu_add[NB_TEST];
 int gpu_add_alloc[NB_TEST];
+int gpu_add_write[NB_TEST];
 int gpu_add_calc[NB_TEST];
 int gpu_add_read[NB_TEST];
 int gpu_add_release[NB_TEST];
 
 int gpu_mult[NB_TEST];
 int gpu_mult_alloc[NB_TEST];
+int gpu_mult_write[NB_TEST];
 int gpu_mult_calc[NB_TEST];
 int gpu_mult_read[NB_TEST];
 int gpu_mult_release[NB_TEST];
 
 int gpu_div[NB_TEST];
 int gpu_div_alloc[NB_TEST];
+int gpu_div_write[NB_TEST];
 int gpu_div_calc[NB_TEST];
 int gpu_div_read[NB_TEST];
 int gpu_div_release[NB_TEST];
@@ -65,6 +68,14 @@ static inline void stop_print(struct timeval* tm) {
     unsigned long long t = 1000000 * (tm2.tv_sec - tm->tv_sec)
                                + (tm2.tv_usec - tm->tv_usec) ;
     printf("%llu us\n", t);
+}
+
+double avg(int* res) {
+  int sum =0;
+  for(int j =0; j < NB_TEST; j++) {
+    sum += res[j];
+  }
+  return (double)sum / NB_TEST;
 }
 
 
@@ -102,6 +113,7 @@ int vector_add_on_cpu(int* A, int* B) {
   for (int i = 0; i < LIST_SIZE; i++) {
     C[i] = A[i] + B[i];
   }
+  // printf("avg add cpu: %f\n", avg(C));
   free(C);
   return 0;
 }
@@ -110,6 +122,7 @@ int vector_mult_on_cpu(int* A, int* B) {
   for (int i = 0; i < LIST_SIZE; i++) {
     C[i] = A[i] * B[i];
   }
+  // printf("avg mult cpu: %f\n", avg(C));
   free(C);
   return 0;
 }
@@ -118,6 +131,7 @@ int vector_div_on_cpu(int* A, int* B) {
   for (int i = 0; i < LIST_SIZE; i++) {
     C[i] = A[i] / B[i];
   }
+  // printf("avg div cpu: %f\n", avg(C));
   free(C);
   return 0;
 }
@@ -125,7 +139,7 @@ int vector_div_on_cpu(int* A, int* B) {
 
 int vector_operation_on_gpu(cl_context* context, cl_command_queue* command_queue,
                              cl_kernel* kernel, int* A, int* B, int* res,
-                    int* alloc, int* calc, int* read, int* release, int j) {
+                    int* alloc, int* write, int* calc, int* read, int* release, int j) {
   /*
   for (int i = 0; i < LIST_SIZE; i++) {
     printf("A[%d] = %d\n", i, A[i]);
@@ -144,18 +158,20 @@ int vector_operation_on_gpu(cl_context* context, cl_command_queue* command_queue
 
   cl_mem c_mem_obj = clCreateBuffer(*context, CL_MEM_READ_WRITE, 
       LIST_SIZE * sizeof(int), NULL, &ret);
-  
+  stop(&tm_atom, alloc, j);
+
+  start(&tm_atom);
   // Copy the lists A and B to their respective memory buffers
   ret = clEnqueueWriteBuffer(*command_queue, a_mem_obj, CL_TRUE, 0,
       LIST_SIZE * sizeof(int), A, 0, NULL, NULL);
   ret = clEnqueueWriteBuffer(*command_queue, b_mem_obj, CL_TRUE, 0, 
       LIST_SIZE * sizeof(int), B, 0, NULL, NULL);
-  stop(&tm_atom, alloc, j);
 
   // Set the arguments of the kernel
   ret = clSetKernelArg(*kernel, 0, sizeof(cl_mem), (void *)&a_mem_obj);
   ret = clSetKernelArg(*kernel, 1, sizeof(cl_mem), (void *)&b_mem_obj);
   ret = clSetKernelArg(*kernel, 2, sizeof(cl_mem), (void *)&c_mem_obj);
+  stop(&tm_atom, write, j);
 
   // Execute the OpenCL add_kernel on the list
   size_t global_item_size = LIST_SIZE; // Process the entire lists
@@ -184,19 +200,13 @@ int vector_operation_on_gpu(cl_context* context, cl_command_queue* command_queue
   ret = clReleaseMemObject(b_mem_obj);
   ret = clReleaseMemObject(c_mem_obj);
   stop(&tm_atom, release, j);
+  //printf("avg res gpu: %f\n", avg(C));
   free(C);
   stop(&tm_local, res, j);
   return 0;
 
 }
 
-double avg(int* res) {
-  int sum =0;
-  for(int j =0; j < NB_TEST; j++) {
-    sum += res[j];
-  }
-  return (double)sum / NB_TEST;
-}
 
 int main(void) {
   // Get platform and device information
@@ -251,11 +261,11 @@ int main(void) {
     start(&tm_global);
     {
       vector_operation_on_gpu(&context, &command_queue, &add_kernel, A, B, gpu_add,
-                              gpu_add_alloc, gpu_add_calc, gpu_add_read, gpu_add_release, j);
+                              gpu_add_alloc, gpu_add_write, gpu_add_calc, gpu_add_read, gpu_add_release, j);
       vector_operation_on_gpu(&context, &command_queue, &multv_kernel, A, B, gpu_mult,
-                              gpu_mult_alloc, gpu_mult_calc, gpu_mult_read, gpu_mult_release, j);
+                              gpu_mult_alloc, gpu_mult_write, gpu_mult_calc, gpu_mult_read, gpu_mult_release, j);
       vector_operation_on_gpu(&context, &command_queue, &divide_kernel, A, B, gpu_div,
-                              gpu_div_alloc, gpu_div_calc, gpu_div_read, gpu_div_release, j);
+                              gpu_div_alloc, gpu_div_write, gpu_div_calc, gpu_div_read, gpu_div_release, j);
     }
     stop(&tm_global, gpu, j);
     // test on cpu
@@ -288,20 +298,22 @@ int main(void) {
   printf("avg time cpu %f\n", avg(cpu));
   printf("\n");
   printf("\n");
-  printf("\n");
   printf("    avg time gpu_add_alloc %f\n", avg(gpu_add_alloc));
+  printf("    avg time gpu_add_write %f\n", avg(gpu_add_write));
   printf("    avg time gpu_add_calc %f\n", avg(gpu_add_calc));
   printf("    avg time gpu_add_read %f\n", avg(gpu_add_read));
   printf("    avg time gpu_add_release %f\n", avg(gpu_add_release));
   printf("  avg time gpu_add %f\n", avg(gpu_add));
   printf("\n");
   printf("    avg time gpu_mult_alloc %f\n", avg(gpu_mult_alloc));
+  printf("    avg time gpu_mult_write %f\n", avg(gpu_mult_write));
   printf("    avg time gpu_mult_calc %f\n", avg(gpu_mult_calc));
   printf("    avg time gpu_mult_read %f\n", avg(gpu_mult_read));
   printf("    avg time gpu_mult_release %f\n", avg(gpu_mult_release));
   printf("  avg time gpu_mult %f\n", avg(gpu_mult));
   printf("\n");
   printf("    avg time gpu_div_alloc %f\n", avg(gpu_div_alloc));
+  printf("    avg time gpu_div_write %f\n", avg(gpu_div_write));
   printf("    avg time gpu_div_calc %f\n", avg(gpu_div_calc));
   printf("    avg time gpu_div_read %f\n", avg(gpu_div_read));
   printf("    avg time gpu_div_release %f\n", avg(gpu_div_release));
